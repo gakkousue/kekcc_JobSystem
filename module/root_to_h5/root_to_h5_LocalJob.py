@@ -8,7 +8,7 @@ import awkward as ak
 import argparse
 
 from utils.base.local_job import LocalJob
-from module.root_to_h5.root_tp_h5_BatchJob.py import RootToH5BatchJob
+from module.root_to_h5.root_to_h5_BatchJob import RootToH5BatchJob
 
 
 class RootToH5LocalJob(LocalJob):

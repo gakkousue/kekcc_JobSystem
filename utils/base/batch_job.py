@@ -43,8 +43,8 @@ class BatchJob(ABC):
     parser = self.get_parser()
     args = parser.parse_args()
 
-    # 対話型パーサーの場合、オプション確認を実行
-    if hasattr(parser, 'confirm_options'):
+    # 対話型パーサーの場合、かつターミナルからの実行時のみオプション確認を実行
+    if hasattr(parser, 'confirm_options') and sys.stdin.isatty():
       parser.confirm_options(args)
     
     try:
