@@ -1,3 +1,5 @@
+002
+merge_h5を追加
 001
 root2h5のバグ修正
 CLIでのみargument_parserの対話モードが起動するようにbatch_job.pyを修正
