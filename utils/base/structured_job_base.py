@@ -81,6 +81,13 @@ class StructuredJobBase(BatchJob):
     parser.add_argument("--base-list-base-dir-dir", dest="base_list_base_dir_dir", default="",
                         help="list-base-dirが相対パスの場合、このディレクトリを基準にします。")
 
+    parser.add_argument(
+        "--use-listfile-dir", 
+        dest="use_listfile_dir",
+        action="store_true",
+        help="listfileがあるディレクトリを基準にファイルを処理します。"
+    )
+
     # ループ制御引数
     parser.add_argument("count", nargs="?",
                         help="処理するファイル数 (-1=全て)",
@@ -142,8 +149,11 @@ class StructuredJobBase(BatchJob):
 
     if args.base_listfile_dir and not os.path.isabs(args.listfile):
         args.listfile = os.path.join(args.base_listfile_dir, args.listfile)
-
-    if args.base_list_base_dir_dir and not os.path.isabs(args.list_base_dir):
+    
+    # listfileのあるディレクトリを基準にする場合
+    if args.use_listfile_dir:
+        args.list_base_dir = os.path.dirname(os.path.abspath(args.listfile))
+    elif args.base_list_base_dir_dir and not os.path.isabs(args.list_base_dir):
         args.list_base_dir = os.path.join(args.base_list_base_dir_dir, args.list_base_dir)
 
     listfile = args.listfile
