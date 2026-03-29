@@ -66,9 +66,19 @@ class LSFJob(ListFileJobBase):
     cmd = ["bsub", "-o", bsublogfile, "-q", args.queue, shfile]
     
     try:
-      subprocess.run(cmd, check=True)
+      result = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+      if result.stdout:
+          print(result.stdout, end="")
+      if result.stderr:
+          import sys
+          print(result.stderr, end="", file=sys.stderr)
     except subprocess.CalledProcessError as e:
       print(f"Failed to submit job for {inputfile_path}: {e}")
+      if e.stdout:
+          print(e.stdout, end="")
+      if e.stderr:
+          import sys
+          print(e.stderr, end="", file=sys.stderr)
       raise e
 
     return list_entries
