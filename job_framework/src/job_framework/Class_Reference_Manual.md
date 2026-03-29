@@ -1,105 +1,68 @@
 # Class Reference Manual
 
-## 1. `utils.argument_parser.InteractiveArgumentParser`
-
-標準ライブラリ `argparse.ArgumentParser` を拡張したクラスです。
-引数が不足している場合やバリデーションエラー時に、**対話的にユーザーに入力を求める機能**と、**厳密な検証ロジック**を追加しています。
-
-### 基本的な使い方
-```python
-from utils.argument_parser import InteractiveArgumentParser
-parser = InteractiveArgumentParser(description="説明")
-```
+本マニュアルは、`job_framework` パッケージ内に定義されている主要なクラス群の仕様と、開発者が新しいジョブを実装する際のリファレンスを提供します。
 
 ---
 
-### メソッド詳細
+## クラス階層構造
+ジョブフレームワークは用途に合わせた継承ツリーを提供しています。実装したいジョブの性質に合わせて、適切なクラスを継承してください。
 
-#### `add_argument(*args, **kwargs)`
-引数を定義します。標準の `argparse` の機能に加え、`prompt` と `validate` という独自のキーワード引数を受け取ります。
-
-**引数:**
-*   **`*args`**: (位置引数)
-    *   引数の名前。例: `"filename"`, `"-c"`, `"--count"`。
-*   **`**kwargs`**: (キーワード引数)
-    *   **標準 `argparse` の引数**:
-        *   `help`: ヘルプメッセージ（推奨）。
-        *   `default`: デフォルト値。
-        *   `type`: 型変換関数（`int`, `float` など）。
-        *   `nargs`: 引数の数（`"?"`: 0or1個, `"+"`: 1個以上 など）。
-        *   `dest`: 内部的な変数名。
-    *   **`prompt`** (str, optional): **[独自機能]**
-        *   対話モード時に表示する入力要求メッセージ。
-        *   これが設定されている引数が未指定（`None`）の場合、ユーザーに入力を求めます。
-        *   **注意**: バッチモード（非対話）では、この項目が設定されている引数は「必須」とみなされます。
-    *   **`validate`** (str | callable | list, optional): **[独自機能]**
-        *   入力値に対する検証ルール。
-        *   **文字列**: 組み込みルール（後述）を指定。
-        *   **関数**: 値を受け取り `True/False` を返す関数。
-        *   **リスト**: 複数のルールを適用する場合（例: `["file_exists", check_ext] `）。
-
-**使用例:**
-```python
-parser.add_argument("input", prompt="入力ファイル: ", validate="file_exists")
-```
+- **`BatchJob`**: 最もプレーンなジョブ（引数解析と実行手順のみ）
+  └── **`StructuredJobBase`**: 出力ディレクトリの構築を自動化
+      ├── **`BatchRunnerJob`**: 外部モジュールを動的にロードし、順次実行とシステム全体のロギングを統括する特殊ランナー
+      └── **`ListFileJobBase`**: リストファイルを入力とし、複数ファイルへのループ処理を自動化
+          ├── **`LSFJob`**: 各ループ処理をLSF (`bsub`) クラスターにジョブとして投入する
+          └── **`LocalJob`**: 各ループ処理をローカルマシン上で直接・逐次実行する
 
 ---
 
-#### `parse_args(args=None, namespace=None, interactive=True)`
-引数の解析と検証を実行します。このクラスの心臓部です。
+## 1. `job_framework.argument_parser.InteractiveArgumentParser`
 
-**引数:**
-*   **`args`** (list, optional):
-    *   解析する引数のリスト。デフォルトは `sys.argv[1:]` (コマンドライン引数)。
-    *   バッチ処理時はここに設定ファイルから生成したリストを渡します。
-*   **`namespace`** (argparse.Namespace, optional):
-    *   結果を格納するオブジェクト。通常は `None`。
-*   **`interactive`** (bool, default=`True`): **[重要]**
-    *   **`True` (対話モード)**:
-        *   必須引数が足りない、またはバリデーションエラーの場合、**ユーザーに入力を求めます**。
-    *   **`False` (非対話/バッチモード)**:
-        *   対話を行わず、検証を行います。
-        *   エラーが見つかった場合、その場では停止せず全ての引数をチェックし、最終的に **`argparse.ArgumentError` 例外** を発生させます。
+標準ライブラリ `argparse.ArgumentParser` を拡張したクラスです。引数が不足している場合やバリデーションエラー時に、**対話的にユーザーに入力を求める機能**と、**厳密な検証ロジック**を追加しています。
 
-**戻り値:**
-*   `argparse.Namespace`: 解析・検証済みの引数オブジェクト。
+### 主な拡張メソッド・引数
 
----
+- **`add_argument(*args, **kwargs)`**
+  標準の引数に加え、以下の独自引数を取ります。
+  - **`prompt` (str)**: 対話モード時にプロンプトとして表示する文字列。指定された引数が入力されなかった場合にユーザーに入力を求めます。（バッチモード時は必須項目扱いとなります）
+  - **`validate` (str | callable | list)**: 入力値のバリデーションルール。`"file_exists"` などの組み込み文字や、真偽値を返す独自関数を渡せます。
 
-#### `confirm_options(args)`
-現在の引数設定を一覧表示し、実行前にユーザーに変更の機会を与えます。
+- **`parse_args(args=None, interactive=True)`**
+  引数の解析と検証を実行します。
+  - `interactive=True` の場合は対話モードとなり、エラー時に再入力を促します。
+  - `interactive=False` （`batch_run.py` 経由など）の場合は厳密にチェックし、エラー時は即座に例外を送出します。
 
-**引数:**
-*   **`args`** (`argparse.Namespace`): `parse_args` で解析されたオブジェクト。
+- **`confirm_options(args)`**
+  解析完了後の引数を一覧表示し、実行前にユーザーに変更の機会を与えます。
 
-**挙動:**
-1.  現在のオプション値を表示します。
-2.  ユーザーに変更するか尋ねます。
-3.  ユーザーが `"-s 100"` のように入力すると、その内容で `args` を更新し、再度バリデーションを実行します。
-
----
-
-### 組み込みバリデーションルール (文字列指定)
-`add_argument` の `validate` 引数に文字列で指定できるルール一覧です。
-
-| ルール名 | 説明 |
+### 組み込みバリデーションルール
+| ルール名 (str) | 説明 |
 | :--- | :--- |
-| **`"file_exists"`** | `os.path.isfile(value)` が真であること。 |
+| `"file_exists"` | 指定されたファイルパスが物理的に存在することを確認 (`os.path.isfile`) |
 
 ---
 
-## 2. `utils.batch_job.BatchJob`
+## 2. `job_framework.batch_job.BatchJob`
 
-すべてのジョブスクリプトの親となる抽象基底クラスです。
-定型的な処理（引数解析、エラーハンドリング、メイン実行フロー）を隠蔽します。
+すべてのジョブスクリプトの親となる抽象基底クラスです。定型的な処理（引数解析と実行フロー）の面倒を見ます。
+
+### 実装すべきメソッド
+- **`get_parser(self)`** 【必須】: このジョブで使用する `InteractiveArgumentParser` オブジェクトを構築して返します。
+- **`execute(self, args)`** 【必須】: パース後の引数（`args`）を受け取り、ジョブのメイン処理を実行します。
 
 ### 基本的な使い方
 ```python
-from utils.batch_job import BatchJob
+from job_framework.batch_job import BatchJob
+from job_framework.argument_parser import InteractiveArgumentParser
 
 class MyJob(BatchJob):
-    def get_parser(self): ...
-    def execute(self, args): ...
+    def get_parser(self):
+        parser = InteractiveArgumentParser(description="My Simple Job")
+        parser.add_argument("input", help="入力ファイル", prompt="入力ファイル: ")
+        return parser
+
+    def execute(self, args):
+        print(f"Processing {args.input}...")
 
 if __name__ == "__main__":
     MyJob().main()
@@ -107,226 +70,76 @@ if __name__ == "__main__":
 
 ---
 
-### メソッド詳細
+## 3. `job_framework.structured_job_base.StructuredJobBase`
 
-#### `get_parser(self)` **[抽象メソッド/必須実装]**
-このジョブで使用する `InteractiveArgumentParser` を構築して返します。
+`BatchJob` を継承し、**出力先ディレクトリの自動生成と管理**を行う機能を追加した基底クラスです。「特定のディレクトリ群を準備してから処理を行うジョブ」を作る際に使います。
 
-**引数:** なし
-**戻り値:** `InteractiveArgumentParser` オブジェクト
+### 自動的に定義される引数
+- `outputdir` (位置引数), `--base-output-dir`
 
-**実装例:**
-```python
-def get_parser(self):
-    parser = InteractiveArgumentParser(description="My Job")
-    parser.add_argument("input", help="Input file")
-    return parser
-```
-
----
-
-#### `execute(self, args)` **[抽象メソッド/必須実装]**
-ジョブのメイン処理を記述します。`parse_args` を通過した（検証済みの）引数が渡されます。
-
-**引数:**
-*   **`args`** (`argparse.Namespace`): 引数が格納されたオブジェクト。`args.変数名` でアクセスします。
-
-**戻り値:** なし（エラー時は例外を送出）
-
-**実装例:**
-```python
-def execute(self, args):
-    print(f"Processing {args.input}...")
-    # 処理ロジック
-```
+### 実装・オーバーライドすべきメソッド
+- **`run_structured_job(self, args, custom_output_dirs)`** 【必須】
+  - `execute()` の代わりに、ディレクトリ作成などの準備がすべて完了した後に呼ばれるメイン処理です。`custom_output_dirs` に作成されたディレクトリ群のパスが辞書形式で渡されます。
+- **`setup_output_dirs(self, args, outputdir)`** 【任意】
+  - ジョブに必要なサブディレクトリを定義します。`{ "カテゴリ名": "フルパス" }` の辞書を返すと、システムが実行前にこれらを自動で作成します。
+- **`add_args(self, parser)`** 【任意】
+  - ジョブ固有の独自引数を追加設定するためのフック関数です。
 
 ---
 
-#### `main(self)`
-スクリプトのエントリーポイントです。通常、`if __name__ == "__main__":` ブロックから呼び出します。
+## 4. `job_framework.list_file_job_base.ListFileJobBase`
 
-**引数:** なし
-**戻り値:** なし
+`StructuredJobBase` を継承し、**「リストファイル (`.list`) を入力として読み込み、そこに記載されたファイルパス1つひとつに対してループ処理を行う」** タイプのジョブを作成するための基底クラスです。
 
-**内部フロー:**
-1.  `get_parser()` を呼び出しパーサーを取得。
-2.  `parser.parse_args()` を実行（対話モードON）。
-3.  `parser.confirm_options(args)` を実行し、ユーザーに最終確認。
-4.  `execute(args)` を呼び出して処理実行。
-5.  例外が発生した場合はキャッチしてエラーメッセージを表示し、終了コード1で終了。
+### 自動的に定義される引数
+- 位置引数: `listfile` (リストファイル), `count` (処理する件数, -1で全件)
+- パス制御: `--use-listfile-dir`, `-b` / `--list-base-dir`, `-s` / `--nstart` など
 
----
-
-#### `get_default_values(self)`
-パーサーに定義されているデフォルト値を抽出します。
-主に `batch_run.py` が「デフォルト設定」を取得するために使用します。開発者が直接呼ぶことは稀です。
-
-**引数:** なし
-**戻り値:** `dict`: `{ "引数名": デフォルト値, ... }`
+### 実装・オーバーライドすべきメソッド
+- **`process_file(self, inputfile_path, output_basename, args, output_dirs)`** 【必須】
+  - リスト内の各ファイルに対して呼ばれる、個別の処理を記述します。
+  - 戻り値として `{ "カテゴリキー": "出力リストに書き込みたい文字列" }` を返すと、すべてのファイルの処理完了後、指定された出力ディレクトリに結果をまとめた `.list` ファイルが自動生成されます。
 
 ---
 
-## 3. 実装上の注意点とTips
+## 5. `job_framework.lsf_job.LSFJob`
 
-### `validate` にカスタム関数を使う場合
-バリデーション関数は、失敗時に `False` を返すだけでなく、**なぜ失敗したかを `print()` する** ように実装してください。
+`ListFileJobBase` を継承し、各ファイルへの処理をLFS分散環境 (`bsub` コマンド) に投入する機能を持ったクラスです。ログ出力用ディレクトリ (`logs/sh`, `logs/log`, `logs/bsublog`) が内部で自動的に追加生成されます。
 
-```python
-def my_check(value):
-    if value == "bad":
-        print("Error: 'bad' は許可されていません。") # エラー理由を表示
-        return False
-    return True
-```
+### 自動的に定義される引数
+- `-q` / `--queue`: 投入キュー名（デフォルト: `s`）
 
-### 対話モードとバッチモードの挙動の違い
-| 項目 | 対話モード (`main()`経由) | バッチモード (`batch_run.py`経由) |
-| :--- | :--- | :--- |
-| **引数不足 (`prompt`あり)** | プロンプトを表示して入力を待つ | **エラー** (ArgumentError) |
-| **引数不足 (`prompt`なし)** | エラー (ArgumentError) | **エラー** (ArgumentError) |
-| **バリデーション失敗** | 再入力を促すループ | **エラー** (ArgumentError) |
-| **実行確認** | `confirm_options` で確認する | 確認なしで即実行 |
-
-### `nargs="?"` の扱い
-*   `add_argument("file", nargs="?", prompt="File: ")` と定義した場合:
-    *   **対話モード**: 引数がなくてもエラーにならず、プロンプトで入力を求めます。
-    *   **バッチモード**: 引数（JSON内の指定）がないと、「必須項目欠落」としてエラーになります。
-    *   これにより、「手動実行時は気軽に入力、バッチ時は厳密に指定」という挙動を実現しています。
-
-## 4. `utils.structured_job_base.StructuredJobBase`
-
-`BatchJob` を継承し、**「リストファイルを入力として、各ファイルに対して処理を行い、結果を特定のディレクトリ構造に出力する」** タイプのジョブを作成するための基底クラスです。
-
-パスの結合、入力ファイルの存在確認、出力ディレクトリの作成、ループ処理、そして最終的な `.list` ファイルの生成といった定型作業を自動化します。開発者は「1ファイルに対する具体的な処理内容」を記述するだけで済みます。
-
-### 基本的な使い方
-```python
-from utils.structured_job_base import StructuredJobBase
-
-class MyProcessorJob(StructuredJobBase):
-    
-    def add_job_specific_args(self, parser):
-        # 独自の引数を追加
-        parser.add_argument("--option", default="default")
-
-    def setup_output_dirs(self, args, outputdir):
-        # 出力ディレクトリ構成を定義
-        return {
-            "data": os.path.join(outputdir, "data"),
-            "log": os.path.join(outputdir, "log")
-        }
-
-    def process_file(self, inputfile_path, output_basename, args, output_dirs):
-        # 1ファイルごとの処理を記述
-        print(f"Processing {inputfile_path}...")
-        
-        # 出力ファイル名を作成
-        outfile = os.path.join(output_dirs["data"], f"{output_basename}.dat")
-        
-        # ... ここで実際の処理やジョブ投入を行う ...
-        
-        # リストファイルに記録したいファイル名を返す
-        return { "data": f"{output_basename}.dat" }
-
-if __name__ == "__main__":
-    MyProcessorJob().main()
-```
+### 実装・オーバーライドすべきメソッド
+- **`generate_command(self, inputfile_path, output_basename, args, output_dirs)`** 【必須】
+  - `process_file` の代わりに実装し、対象ファイルに対して**実行したいコマンドの文字列**を生成して返します。
+  - 指定されたコマンドは自動的にシェルスクリプト化され、標準出力をログに退避する処理などを付与された上で `bsub` によってクラスタに投入されます。
+  - 戻り値は `(実行コマンド文字列全体, 返したいリストエントリの辞書)` のタプル形式で返してください。
 
 ---
 
-### メソッド詳細 (サブクラス実装用)
+## 6. `job_framework.local_job.LocalJob`
 
-以下のメソッドをオーバーライド（上書き）して、ジョブ固有の振る舞いを定義します。
+`ListFileJobBase` を継承し、LSFを使わずに**ローカル環境で直接ループ処理を実行する**クラスです。
+このクラスを使用すると、対象ごとの標準出力 (`stdout`) および標準エラー出力 (`stderr`) が、各ファイル専用のログファイル (`logs/log/[ファイル名].log`) に自動的にリダイレクトされます。
 
-#### `add_job_specific_args(self, parser)`
-共通引数（後述）以外の、ジョブ固有の引数を追加するためのフックメソッドです。
-
-**引数:**
-*   **`parser`**: `InteractiveArgumentParser` オブジェクト。`parser.add_argument(...)` で引数を追加します。
-
-**実装例:**
-```python
-def add_job_specific_args(self, parser):
-    parser.add_argument("-q", "--queue", default="s", help="LSF Queue")
-```
+### 実装・オーバーライドすべきメソッド
+- **`run_local(self, inputfile_path, output_basename, args, output_dirs)`** 【必須】
+  - `generate_command` や `process_file` と同様の引数を取り、ローカルで実行したい処理（Python関数の呼び出しやサブプロセスの起動など）を直接ここに記述します。
+  - 戻り値として `{ "カテゴリ名": "出力文字列" }` を返す仕様は他と同じです。
 
 ---
 
-#### `setup_output_dirs(self, args, outputdir)`
-ジョブが必要とする出力ディレクトリの構造を定義します。ここで定義したディレクトリは、実行時に自動的に `os.makedirs` で作成されます。
+## 7. `job_framework.batch_run.BatchRunnerJob`
 
-**引数:**
-*   **`args`**: 解析済みの引数オブジェクト。
-*   **`outputdir`**: ユーザーが指定したルート出力ディレクトリ（パス結合済み）。
+システム全体を統括し、1つの設定用JSONファイルから環境設定を読み取り、指定されたジョブモジュールを連続実行するためのランナークラスです。
+これ自身も `StructuredJobBase` を継承しており、システムログ（`batch_run.log`）の配置先となるディレクトリ (`outputdir`) の管理機能を持っています。
 
-**戻り値:**
-*   `dict`: `{ "カテゴリキー": "ディレクトリのフルパス" }`
-    *   ここで指定したキーは、`process_file` の戻り値でリスト生成先を指定する際に使用します。
+### 内部で使われる特徴的なクラス
+- **`JobDualStream` / `TerminalIndenter`**
+  親となる `batch_run.log`、そして各ジョブによって個別に生成されるファイルログ (`[モジュール名].log`)、さらにターミナル標準出力へのインデント付き表示。これら複数のストリームに対し、出力をフォーク（分岐）して同時に書き込むための内部ラッパークラスです。
 
-**実装例:**
-```python
-def setup_output_dirs(self, args, outputdir):
-    return {
-        "slcio": os.path.join(outputdir, "slcio"),
-        "root":  os.path.join(outputdir, "root")
-    }
-```
-
----
-
-#### `process_file(self, inputfile_path, output_basename, args, output_dirs)` **[必須実装]**
-入力リストに含まれるファイル1つひとつに対して実行される処理内容を記述します。コマンドの実行や、BSUBへのジョブ投入などはここで行います。
-
-**引数:**
-*   **`inputfile_path`**: 入力ファイルのフルパス。
-*   **`output_basename`**: 入力ファイル名から拡張子を除いたもの（例: `input.slcio` -> `input`）。出力ファイル名の生成に便利です。
-*   **`args`**: 解析済みの引数オブジェクト。
-*   **`output_dirs`**: `setup_output_dirs` で生成されたディレクトリパスの辞書。
-
-**戻り値:**
-*   `dict`: `{ "カテゴリキー": "リストファイルに書き込む文字列" }`
-    *   リストファイル (`.list`) を生成したいカテゴリに対して、そのファイルに対応するエントリ（通常はファイル名）を返します。
-    *   リスト生成が不要な場合は空の辞書 `{}` または `None` を返しても構いません。
-
-**実装例:**
-```python
-def process_file(self, inputfile_path, output_basename, args, output_dirs):
-    # 出力パス決定
-    out_path = os.path.join(output_dirs["slcio"], f"{output_basename}.slcio")
-    
-    # コマンド実行 (擬似コード)
-    run_command(f"processor {inputfile_path} {out_path}")
-    
-    # リストにはファイル名だけ記録する
-    return { "slcio": f"{output_basename}.slcio" }
-```
-
----
-
-### 自動的に定義される共通引数
-
-`StructuredJobBase` は以下の引数を自動的に定義し、処理します。`add_job_specific_args` でこれらを再定義する必要はありません。
-
-| 引数名 | 説明 |
-| :--- | :--- |
-| **`listfile`** | 入力ファイルリスト (`.list`)。 |
-| **`outputdir`** | 出力のルートディレクトリ。 |
-| **`--base-output-dir`** | `outputdir` が相対パスの場合の基準ディレクトリ。 |
-| **`--base-listfile-dir`** | `listfile` が相対パスの場合の基準ディレクトリ。 |
-| **`--base-list-base-dir-dir`** | `list_base_dir` が相対パスの場合の基準ディレクトリ。 |
-| **`count`** | 処理するファイル数。`-1` で全件処理。 |
-| **`-b`, `--list-base-dir`** | リスト内のファイルパスが相対パスの場合の基準ディレクトリ。 |
-| **`-s`, `--nstart`** | 処理を開始する行番号（1始まり）。 |
-
----
-
-### 実行フロー (executeメソッドの内部挙動)
-
-1.  **パス結合**: `base-*` 引数が指定されている場合、`outputdir` などを絶対パスに変換します。
-2.  **バリデーション**: 入力リストファイルの存在やディレクトリの存在を確認します。
-3.  **ディレクトリ作成**: `setup_output_dirs` で定義されたディレクトリを作成します。
-4.  **ファイルループ**:
-    *   指定された範囲（`nstart` ～ `count`）の入力ファイルを抽出します。
-    *   各ファイルについて `process_file` を呼び出します。
-    *   `process_file` の戻り値を収集します。
-5.  **リスト生成**: 収集した結果を基に、各出力ディレクトリに `.list` ファイルを生成します。
+### 実行の基本フロー
+1. JSONから `target_module` または `target_script` で指定されたPythonファイルの場所を検索し、`importlib` を使って**動的にターゲットクラスをロード**します。
+2. そのクラスの `InteractiveArgumentParser` (パーサー) を用いて、`common_settings` と事前定義された `jobs` 全てを一気に構文解析し、**リハーサルバリデーション (Phase 1)** を行います。
+3. すべてのエラーチェックを通過した場合にのみ、初めて実際のジョブの実行ループ **(Phase 2)** を開始します。
+4. ジョブ実行中、子ジョブプロセスが出力する `stdout` は動的に `JobDualStream` 等にすり替えられ、親ターミナルではインデント付きで階層が分かりやすく表示されます。
