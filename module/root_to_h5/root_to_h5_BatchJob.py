@@ -67,8 +67,8 @@ class RootToH5BatchJob(BatchJob):
     # ----------------------------
     # 配列タイプ判定関数
     # ----------------------------
-    def _get_array_type(self, ak_array):
-        """awkward配列のタイプを判定"""
+    def _get_array_info(self, ak_array):
+        """awkward配列の構造情報を取得"""
         type_str = str(ak_array.type)
         dim_count = type_str.count('*')
         is_variable = "var" in type_str
@@ -77,8 +77,33 @@ class RootToH5BatchJob(BatchJob):
             "type_str": type_str,
             "dimensions": dim_count,
             "is_variable": is_variable,
-            "shape": ak_array.shape if hasattr(ak_array, 'shape') else None
         }
+
+    def _get_primitive_dtype(self, ak_array):
+        """
+        Awkward配列の最深部のプリミティブ型(numpy.dtype)を取得する。
+        データを走査せず、レイアウト情報から直接型を決定する。
+        """
+        try:
+            # layoutを取得
+            node = ak_array.layout
+            
+            # ListArray, RegularArrayなどのラッパーを剥がして最深部へ
+            while hasattr(node, "content"):
+                node = node.content
+            
+            # 最深部のデータノード(NumpyArray等)からdtypeを取得
+            if hasattr(node, "dtype"):
+                return np.dtype(node.dtype)
+            
+            # 万が一解決できない場合は従来のflatten方式（保険）
+            print("flatten方式でdtypeを取得")
+            flat = ak.flatten(ak_array, axis=None)
+            return flat.to_numpy().dtype
+            
+        except Exception:
+            # エラー時はfloat64をデフォルトとする
+            return np.float64
 
     # ----------------------------
     # データ保存関数
@@ -102,26 +127,28 @@ class RootToH5BatchJob(BatchJob):
 
     def _save_vlen_dataset(self, h5_group, name, ak_array, compression_level=1):
         try:
+            # 型推論ではなく、AwkwardArrayの定義から正しい型を取得
+            inner_dtype = self._get_primitive_dtype(ak_array)
+            
+            # h5pyに渡すためにPythonリスト化（h5pyのVLEN書き込み仕様）
             data_list = ak_array.to_list()
             
-            if len(data_list) > 0:
-                for item in data_list:
-                    if hasattr(item, '__len__') and len(item) > 0:
-                        sample = np.array(item)
-                        inner_dtype = sample.dtype
-                        break
-                else:
-                    inner_dtype = np.float64
-            else:
-                inner_dtype = np.float64
-            
+            # 書き込み用の一時Object配列を作成
+            # (h5pyでVLENを書くには、入力はobject dtypeのnumpy配列である必要がある)
             np_obj_arr = np.empty(len(data_list), dtype=object)
+            
             for i, item in enumerate(data_list):
-                if hasattr(item, '__len__'):
+                # 個々の要素を正しい型(inner_dtype)のnumpy配列に変換して格納
+                if hasattr(item, '__len__') and not isinstance(item, (str, bytes)):
                     np_obj_arr[i] = np.array(item, dtype=inner_dtype)
                 else:
-                    np_obj_arr[i] = np.array([item], dtype=inner_dtype)
+                    # スカラーやNoneが入っている場合の安全策
+                    if item is None:
+                         np_obj_arr[i] = np.array([], dtype=inner_dtype)
+                    else:
+                         np_obj_arr[i] = np.array([item], dtype=inner_dtype)
             
+            # HDF5上での型定義 (ここで int や float が確定する)
             vlen_dtype = h5py.vlen_dtype(inner_dtype)
             
             if compression_level > 0:
@@ -189,17 +216,18 @@ class RootToH5BatchJob(BatchJob):
                         try:
                             # awkward arrayとして読み込み
                             ak_array = tree[branch_name].array(library="ak")
-                            array_info = self._get_array_type(ak_array)
+                            array_info = self._get_array_info(ak_array)
                             
                             if force_flat:
                                 try:
+                                    # Flat化: 構造は失われるが型(int/float)は維持して保存
                                     flat_data = ak.flatten(ak_array, axis=None).to_numpy()
                                     dataset_name = f"{branch_name}"
                                     success = self._save_dataset(
                                         tree_grp, dataset_name, flat_data, compression_level
                                     )
                                     if success:
-                                        print(f"      [flat] {dataset_name}: 形状={flat_data.shape}")
+                                        print(f"      [flat] {dataset_name}: 形状={flat_data.shape}, 型={flat_data.dtype}")
                                 except Exception as e:
                                     print(f"      [skip-flat] {branch_name}: {e}")
                             else:
@@ -218,7 +246,7 @@ class RootToH5BatchJob(BatchJob):
                                         tree_grp, branch_name, ak_array, compression_level
                                     )
                                     if success:
-                                        print(f"      [vlen] {branch_name}: VLEN型として保存")
+                                        print(f"      [vlen] {branch_name}: VLEN型({dtype})として保存")
 
                         except Exception as e:
                             print(f"    [skip-error] branch {branch_name}: {type(e).__name__}: {e}")
