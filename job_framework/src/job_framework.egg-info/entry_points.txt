@@ -1,0 +1,2 @@
+[console_scripts]
+batch_run = job_framework.batch_run:main

@@ -1,0 +1,6 @@
+Metadata-Version: 2.4
+Name: job_framework
+Version: 0.1.0
+Summary: A framework for creating and running batch jobs.
+Author-email: Your Name <your.email@example.com>
+Requires-Python: >=3.8

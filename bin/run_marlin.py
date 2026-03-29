@@ -6,7 +6,7 @@ import os
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
-from module.run_marlin.run_marlin import MarlinJob
+from job_modules.run_marlin.run_marlin import MarlinJob
 
 if __name__ == "__main__":
     MarlinJob().main()

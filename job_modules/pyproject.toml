@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "job_modules"
+version = "0.1.0"
+authors = [
+  { name="Your Name", email="your.email@example.com" },
+]
+description = "A collection of analysis job modules."
+requires-python = ">=3.8"
+dependencies = [
+    # job_framework パッケージに依存することを明記
+    "job_framework", 
+    "uproot",
+    "h5py",
+    "numpy",
+    "awkward",
+]
+
+[project.scripts]
+merge-h5 = "job_modules.merge_h5.merge_h5:main"
+root-to-h5-batch = "job_modules.root_to_h5.root_to_h5_BatchJob:main"
+root-to-h5-local = "job_modules.root_to_h5.root_to_h5_LocalJob:main"
+root-to-h5-lsf = "job_modules.root_to_h5.root_to_h5_LSFJob:main"
+run-marlin = "job_modules.run_marlin.run_marlin:main"

@@ -1,0 +1,6 @@
+[console_scripts]
+merge-h5 = job_modules.merge_h5.merge_h5:main
+root-to-h5-batch = job_modules.root_to_h5.root_to_h5_BatchJob:main
+root-to-h5-local = job_modules.root_to_h5.root_to_h5_LocalJob:main
+root-to-h5-lsf = job_modules.root_to_h5.root_to_h5_LSFJob:main
+run-marlin = job_modules.run_marlin.run_marlin:main

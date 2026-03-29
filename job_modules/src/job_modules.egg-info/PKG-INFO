@@ -1,0 +1,11 @@
+Metadata-Version: 2.4
+Name: job_modules
+Version: 0.1.0
+Summary: A collection of analysis job modules.
+Author-email: Your Name <your.email@example.com>
+Requires-Python: >=3.8
+Requires-Dist: job_framework
+Requires-Dist: uproot
+Requires-Dist: h5py
+Requires-Dist: numpy
+Requires-Dist: awkward

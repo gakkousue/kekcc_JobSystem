@@ -6,7 +6,7 @@ import os
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
-from utils.excute.batch_run import BatchRunnerJob
+from job_framework.batch_run import BatchRunnerJob
 
 if __name__ == "__main__":
     BatchRunnerJob().main()
