@@ -2,11 +2,12 @@
 import os
 import stat
 import subprocess
-from utils.base.structured_job_base import StructuredJobBase, is_non_empty_string
+from utils.base.structured_job_base import is_non_empty_string
+from utils.base.list_file_job_base import ListFileJobBase
 
-class LSFJob(StructuredJobBase):
+class LSFJob(ListFileJobBase):
   """
-  StructuredJobBaseを拡張し、LSF (bsub) へのジョブ投入機能を追加したクラス。
+  ListFileJobBaseを拡張し、LSF (bsub) へのジョブ投入機能を追加したクラス。
   """
 
   def _add_args(self, parser):

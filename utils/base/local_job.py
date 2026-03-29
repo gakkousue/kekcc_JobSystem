@@ -1,11 +1,11 @@
 # utils/base/local_job.py
 import os
 import subprocess
-from utils.base.structured_job_base import StructuredJobBase
+from utils.base.list_file_job_base import ListFileJobBase
 
-class LocalJob(StructuredJobBase):
+class LocalJob(ListFileJobBase):
   """
-  StructuredJobBaseを拡張し、ローカル環境で直接実行するクラス。
+  ListFileJobBaseを拡張し、ローカル環境で直接実行するクラス。
   ジョブスケジューラは使用しません。
   """
 

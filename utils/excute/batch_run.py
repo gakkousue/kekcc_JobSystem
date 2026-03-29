@@ -7,6 +7,7 @@ import importlib
 import importlib.util
 import inspect
 from utils.base.argument_parser import InteractiveArgumentParser
+from utils.base.structured_job_base import StructuredJobBase
 from utils.base.batch_job import BatchJob
 
 def load_batch_job_class(path, class_name):
@@ -55,17 +56,16 @@ def load_batch_job_class(path, class_name):
         raise ImportError(f"スクリプト '{path}' のロード中にエラーが発生しました: {e}")
 
 
-class BatchRunnerJob(BatchJob):
+class BatchRunnerJob(StructuredJobBase):
   """
-  バッチランナー自身も BatchJob として実装する。
-  これにより batch_run.py から batch_run.py を呼び出すことが可能になる。
+  バッチランナー自身も StructuredJobBase として実装する。
+  これによりログの出力先管理などを統合し、入れ子実行時にも対応可能になる。
   """
 
-  def get_parser(self):
-    parser = InteractiveArgumentParser(
-      description="JSON設定ファイルに基づいて、指定されたPythonスクリプト(BatchJob)を一括で実行する。"
-    )
-    
+  def _add_positional_args(self, parser):
+    """
+    引数の順序を制御し、config_file と outputdir を定義する。
+    """
     # 1. 設定ファイル
     parser.add_argument(
       "config_file",
@@ -74,9 +74,15 @@ class BatchRunnerJob(BatchJob):
       prompt="ジョブ設定JSONファイル: ",
       validate="file_exists"
     )
-    return parser
+    
+    # 2. ランナー自身の出力（ログなど）用ディレクトリ
+    parser.add_argument(
+      "outputdir", nargs="?", 
+      default=os.getcwd(),
+      help="ランナー自体のログ出力ディレクトリ（省略時はカレントディレクトリ）"
+    )
 
-  def execute(self, args):
+  def run_structured_job(self, args, custom_output_dirs):
     config_path = args.config_file
     
     # --- 1. 設定ファイルの読み込み ---
@@ -184,7 +190,9 @@ class BatchRunnerJob(BatchJob):
       print("="*50)
 
       # ログファイルの場所決定
-      log_dir = os.getcwd() 
+      # ジョブごとのログは、各ジョブの outputdir に出力する（JSON内で定義されていれば）
+      # 定義されていなければ、ランナー自身の outputdir を使用する
+      log_dir = args.outputdir 
       if "outputdir" in final_params:
         out_dir_val = final_params["outputdir"]
         base_dir_val = final_params.get("base_output_dir", "")
